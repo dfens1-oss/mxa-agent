@@ -7,3 +7,6 @@ langchain-community
 sentence-transformers
 langchain-chroma
 streamlit-mic-recorder
+gtts
+pyaudio
+speechrecognition
