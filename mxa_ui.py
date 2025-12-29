@@ -10,6 +10,7 @@ from brain import generate_response
 from tool_router import route_expert, detect_tool
 from tools import generate_audio_base64
 from streamlit_mic_recorder import mic_recorder
+from brain import transcribe_audio
 
 # --- CONFIGURATIE & PADEN ---
 st.set_page_config(page_title="MXA Assistant", page_icon="🦁", layout="centered")
@@ -96,25 +97,36 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # --- INPUT & VERWERKING ---
-st.write("---")
-col_mic, col_spacer = st.columns([0.2, 0.8])
-with col_mic:
-    audio_data = mic_recorder(
-        start_prompt="🎙️ Praat",
-        stop_prompt="🛑 Stop",
-        key="mic_recorder"
-    )
+# Gebruik een unieke key en zorg dat we de audio opvangen
+audio_data = mic_recorder(start_prompt="🎙️ Praat", stop_prompt="🛑 Stop", key='recorder')
+
+# Als er gesproken is:
+if audio_data and 'bytes' in audio_data:
+    with st.spinner("Frank vertaalt je spraak..."):
+        tekst_van_spraak = transcribe_audio(audio_data['bytes'])
+        
+    if tekst_van_spraak and len(tekst_van_spraak) > 2:
+        # Voeg toe aan geschiedenis en zet 'prompt' handmatig zodat de rest van de script het oppakt
+        st.session_state.messages.append({"role": "user", "content": tekst_van_spraak})
+        # We forceren een herstart zodat de prompt direct verwerkt wordt
+        st.rerun()
 
 typed_prompt = st.chat_input("Stel je vraag aan het panel...")
 
+# Hier bepalen we wat de actieve vraag is (getypt of gesproken)
 prompt = None
-if audio_data and audio_data.get('transcription'):
-    prompt = audio_data['transcription']
-elif typed_prompt:
+if typed_prompt:
     prompt = typed_prompt
+    st.session_state.messages.append({"role": "user", "content": prompt})
+# Als er al spraak-tekst in de laatste message staat die nog niet beantwoord is:
+elif len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] == "user":
+    # Controleer of het laatste bericht al beantwoord is door de assistant
+    if len([m for m in st.session_state.messages if m["role"] == "assistant"]) < \
+       len([m for m in st.session_state.messages if m["role"] == "user"]):
+        prompt = st.session_state.messages[-1]["content"]
 
 if prompt:
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    # (Vanaf hier blijft je bestaande code voor het genereren van antwoorden hetzelfde)
     with st.chat_message("user", avatar="👤"):
         st.markdown(prompt)
 
