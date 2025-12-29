@@ -5,3 +5,5 @@ langchain-groq
 langchain-huggingface
 langchain-community
 sentence-transformers
+langchain-chroma
+streamlit-mic-recorder
