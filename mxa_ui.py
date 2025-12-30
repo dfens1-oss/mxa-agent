@@ -111,18 +111,20 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
         tool_naam = route["tool"]
         tool_args = route.get("arguments", {})
 
-        # 2. Check of er een tool uitgevoerd moet worden
         tool_result = None
         if tool_naam == "calc":
-            from tools import calculate # Zorg dat dit de nieuwe naam is
+            from tools import calculate
             
-            # Pak de 'equation' uit de JSON van de router
-            equation_to_solve = tool_args.get("equation", last_user_msg)
-            
-            # Voer de tool uit
+            # We pakken de eerste waarde uit de JSON, ongeacht of die 'equation' of 'expressie' heet
+            if isinstance(tool_args, dict) and tool_args:
+                equation_to_solve = list(tool_args.values())[0]
+            else:
+                equation_to_solve = last_user_msg
+
+            # Voer de tool uit zonder de naam van het argument te noemen
             tool_result = calculate(equation_to_solve)
             
-            # Voeg het resultaat toe aan de context voor de Expert
+            # Voeg het resultaat toe aan de context
             last_user_msg = f"{last_user_msg} (Systeem-notitie voor Kevin: De uitkomst is {tool_result})"
 
         # 3. Genereer response via Brain (met de gekozen expert)
