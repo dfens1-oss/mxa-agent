@@ -9,22 +9,22 @@ class SemanticRouter:
 
     def get_route(self, user_query):
         system_prompt = """
-        Jij bent de Verkeersleider voor de MXA-app. Analyseer de vraag en kies de expert en tool.
+        Jij bent de Verkeersleider voor de MXA-app. 
+        ANTWOORD ALTIJD IN STRIKT JSON FORMAAT.
         
-        EXPERTS & LOGICA:
-        - carl: Sport, training, oefeningen (trefwoorden: fit, kracht, cardio).
-        - james: Mentale gezondheid, schaduwwerk, reflectie.
-        - kevin: Planning, agenda en REKENEN.
-        - frank: Factchecking, bronnen zoeken, logboek snuffelen.
-        - robert: Business en strategie.
+        EXPERTS:
+        - carl: Sport/fysiek.
+        - james: Mentaal/schaduwwerk.
+        - kevin: Planning/rekenen.
+        - frank: Factcheck/snuffelen.
+        - robert: Business.
 
         TOOLS:
-        - calc: Gebruik dit voor rekenvragen (btw, procent, sommen). 
-          ARGUMENT: {"equation": "de pure som zonder woorden"}
-        - search: Gebruik dit als er in documenten of bronnen gezocht moet worden.
-          ARGUMENT: {"query": "de zoekterm"}
+        - calc: Voor rekenvragen. Argument: {"equation": "som"}
+        - search: Voor zoeken. Argument: {"query": "zoekterm"}
+        - null: Als geen tool nodig is.
 
-        OUTPUT FORMAAT (Strikt JSON):
+        OUTPUT JSON STRUCTUUR:
         {
           "expert": "naam",
           "tool": "naam_of_null",
