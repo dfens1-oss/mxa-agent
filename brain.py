@@ -5,7 +5,7 @@ from groq import Groq
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 # Frank: Hier zaten de 2 problems, we moeten alles importeren!
-from tools import calc, voeg_taak_toe, toon_takenlijst
+from tools import calculate, voeg_taak_toe, toon_takenlijst
 
 DB_DIR = "db_mxa"
 PERSONA_DIR = "personas"
@@ -89,7 +89,7 @@ tools_definitie = [
     {
         "type": "function",
         "function": {
-            "name": "calc",
+            "name": "calculate",
             "description": "Voer een berekening uit",
             "parameters": {
                 "type": "object",
@@ -138,7 +138,7 @@ def generate_response(prompt, expert_name):
     ### INSTRUCTIES ###
     - Gebruik 'voeg_taak_toe' voor herinneringen/taken.
     - Gebruik 'toon_takenlijst' om taken te tonen.
-    - Gebruik 'calc' voor berekeningen.
+    - Gebruik 'calculate' voor berekeningen.
     - Antwoord altijd in het Nederlands.
 
     ### CONTEXT ###
@@ -166,8 +166,8 @@ def generate_response(prompt, expert_name):
                 functie_naam = tool_call.function.name
                 argumenten = json.loads(tool_call.function.arguments)
                 
-                if functie_naam == "calc":
-                    resultaat = calc(**argumenten)
+                if functie_naam == "calculate":
+                    resultaat = calculate(**argumenten)
                     # We geven Kevin de eer voor de berekening
                     return f"Ik heb het uitgerekend: {resultaat}", "Kevin", []
                 
