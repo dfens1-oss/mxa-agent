@@ -111,20 +111,23 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
         tool_naam = route["tool"]
         tool_args = route.get("arguments", {})
 
+        # 2. Check of er een tool uitgevoerd moet worden
         tool_result = None
         if tool_naam == "calc":
             from tools import calculate
             
-            # We pakken de eerste waarde uit de JSON, ongeacht of die 'equation' of 'expressie' heet
+            # We pakken de waarde uit de dictionary, ongeacht de naam (expressie/equation)
             if isinstance(tool_args, dict) and tool_args:
-                equation_to_solve = list(tool_args.values())[0]
+                # Dit pakt de allereerste waarde uit de verzameling argumenten
+                args_list = list(tool_args.values())
+                equation_to_solve = args_list[0]
             else:
                 equation_to_solve = last_user_msg
 
-            # Voer de tool uit zonder de naam van het argument te noemen
+            # CRUCIAAL: We geven de waarde door zonder 'keyword' (dus niet equation=...)
+            # Hierdoor accepteert de functie het altijd.
             tool_result = calculate(equation_to_solve)
             
-            # Voeg het resultaat toe aan de context
             last_user_msg = f"{last_user_msg} (Systeem-notitie voor Kevin: De uitkomst is {tool_result})"
 
         # 3. Genereer response via Brain (met de gekozen expert)
