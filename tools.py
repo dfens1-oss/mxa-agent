@@ -22,39 +22,25 @@ def generate_audio_base64(text):
         print(f"Audio fout: {e}")
         return None
 
-def calc(expr):
+def calculate(equation): # Naam aangepast naar wat de router stuurt
     import re
     try:
-        # Stap 0: Check of er überhaupt getallen in de zin staan
-        # Als er geen enkel getal is, is het geen som.
-        if not re.search(r'\d', expr):
-            return None
-
-        # Stap 1: Schoon de tekst op
-        expr_clean = expr.lower().replace(',', '.')
+        # De AI stuurt nu al een schone som, bijv "100 * 1.21"
+        # We hoeven alleen nog de komma's door punten te vervangen voor Python
+        equation_clean = str(equation).replace(',', '.')
         
-        # Stap 2: Zoek alle getallen
-        getallen = re.findall(r"\d+\.\d+|\d+", expr_clean)
+        # Veiligheidscheck: alleen cijfers en rekensymbolen toestaan
+        equation_math = re.sub(r'[^0-9\+\-\*\/\.\(\)\s]', '', equation_clean)
         
-        # Stap 3: BTW / Percentage logica (Blijft hetzelfde)
-        if ("btw" in expr_clean or "%" in expr_clean or "procent" in expr_clean) and len(getallen) >= 2:
-            perc = float(getallen[0])
-            bedrag = float(getallen[1])
-            resultaat = (perc / 100) * bedrag
-            return round(resultaat, 2)
+        if not equation_math.strip():
+            return "Ik kon geen geldige som vinden."
             
-        # Stap 4: Normale som
-        # Verwijder tekst. Maar check of er na het verwijderen nog wel iets overblijft om uit te rekenen!
-        expr_math = re.sub(r'[a-zA-Z\s\?]', '', expr_clean).strip()
+        # Voer de berekening uit
+        resultaat = eval(equation_math)
+        return round(resultaat, 2)
         
-        if not expr_math: # Als de zin leeg is na het strippen van letters
-            return None
-            
-        return round(eval(expr_math), 2)
-        
-    except Exception:
-        # Geef None terug bij ELKE fout, zodat mxa.py weet: "Stuur dit maar naar de coaches"
-        return None
+    except Exception as e:
+        return f"Berekeningsfout: {e}"
 
 def search(query):
     # Dummy search voor MVP

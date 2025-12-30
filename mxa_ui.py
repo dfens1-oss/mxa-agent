@@ -8,9 +8,10 @@ import requests
 import hashlib
 from datetime import date
 from brain import generate_response, transcribe_audio
-from tool_router import route_expert
 from tools import generate_audio_base64
 from streamlit_mic_recorder import mic_recorder
+from router import SemanticRouter
+semantic_router = SemanticRouter()
 
 # --- CONFIGURATIE & PADEN ---
 st.set_page_config(page_title="MXA Assistant", page_icon="🦁", layout="centered")
@@ -100,24 +101,34 @@ if typed_prompt:
     st.rerun()
 
 # --- ANTWOORD GENEREREN ---
-# Als het laatste bericht van de 'user' komt en nog niet beantwoord is
 if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
     last_user_msg = st.session_state.messages[-1]["content"]
     
     with st.spinner("Het team overlegt..."):
-        # 1. Bepaal de expert
-        expert_from_router = route_expert(last_user_msg)
-        if expert_from_router:
-            chosen_expert = expert_from_router
-        else:
-            # Kijk naar de vorige assistant message voor context
-            last_assistant_msg = next((m for m in reversed(st.session_state.messages[:-1]) if m["role"] == "assistant"), None)
-            chosen_expert = last_assistant_msg.get("persona", "james") if last_assistant_msg else "james"
+        # 1. De Nieuwe Semantische Router aanroepen
+        route = semantic_router.get_route(last_user_msg)
+        chosen_expert = route["expert"]
+        tool_naam = route["tool"]
+        tool_args = route.get("arguments", {})
 
-        # 2. Genereer response
+        # 2. Check of er een tool uitgevoerd moet worden
+        tool_result = None
+        if tool_naam == "calc":
+            from tools import calculate # Zorg dat dit de nieuwe naam is
+            
+            # Pak de 'equation' uit de JSON van de router
+            equation_to_solve = tool_args.get("equation", last_user_msg)
+            
+            # Voer de tool uit
+            tool_result = calculate(equation_to_solve)
+            
+            # Voeg het resultaat toe aan de context voor de Expert
+            last_user_msg = f"{last_user_msg} (Systeem-notitie voor Kevin: De uitkomst is {tool_result})"
+
+        # 3. Genereer response via Brain (met de gekozen expert)
         response_tekst, persona_display_name, bronnen = generate_response(last_user_msg, chosen_expert)
 
-        # 3. Sla op in history
+        # 4. Sla op in history
         active_persona_slug = re.sub(r'[^a-zA-Z]', '', persona_display_name).lower().strip()
         st.session_state.messages.append({
             "role": "assistant", 
