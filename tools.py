@@ -22,23 +22,25 @@ def generate_audio_base64(text):
         print(f"Audio fout: {e}")
         return None
 
-def calculate(equation): # Naam aangepast naar wat de router stuurt
+def calculate(*args, **kwargs):
     import re
     try:
-        # De AI stuurt nu al een schone som, bijv "100 * 1.21"
-        # We hoeven alleen nog de komma's door punten te vervangen voor Python
+        # We kijken of er een waarde in 'args' staat, of in 'kwargs' (onder welke naam dan ook)
+        if args:
+            equation = args[0]
+        elif kwargs:
+            # Pak de eerste waarde uit de labels (of dat nu 'expressie', 'equation' of 'som' is)
+            equation = list(kwargs.values())[0]
+        else:
+            return "Geen som gevonden."
+
         equation_clean = str(equation).replace(',', '.')
-        
-        # Veiligheidscheck: alleen cijfers en rekensymbolen toestaan
         equation_math = re.sub(r'[^0-9\+\-\*\/\.\(\)\s]', '', equation_clean)
         
         if not equation_math.strip():
-            return "Ik kon geen geldige som vinden."
+            return "Geen geldige berekening."
             
-        # Voer de berekening uit
-        resultaat = eval(equation_math)
-        return round(resultaat, 2)
-        
+        return round(eval(equation_math), 2)
     except Exception as e:
         return f"Berekeningsfout: {e}"
 
