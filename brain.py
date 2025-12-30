@@ -4,6 +4,8 @@ import streamlit as st
 from groq import Groq
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
+# Frank: Hier zaten de 2 problems, we moeten alles importeren!
+from tools import calc, voeg_taak_toe, toon_takenlijst
 
 DB_DIR = "db_mxa"
 PERSONA_DIR = "personas"
@@ -82,23 +84,62 @@ def get_persona(name):
         pass
     return {"name": name.capitalize(), "catchphrase": "Hoppa!", "rules": []}
 
+# Frank: Dit is de gereedschapskist definitie voor de AI
+tools_definitie = [
+    {
+        "type": "function",
+        "function": {
+            "name": "calc",
+            "description": "Voer een berekening uit",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "expressie": {"type": "string", "description": "De som, bijv. 2+2"}
+                },
+                "required": ["expressie"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "voeg_taak_toe",
+            "description": "Sla een nieuwe taak op in de takenlijst",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "taak_omschrijving": {"type": "string", "description": "Wat moet er gebeuren?"}
+                },
+                "required": ["taak_omschrijving"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "toon_takenlijst",
+            "description": "Laat alle openstaande taken zien",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    }
+]
+
 def generate_response(prompt, expert_name):
     p_data = get_persona(expert_name)
     context_text, bron_documenten = get_rag_context(prompt)
-    
-    # Frank: De client wordt nu van bovenin hergebruikt!
     
     catchphrase = p_data.get('catchphrase', '')
     rules_str = "\n".join([f"- {r}" for r in p_data.get("rules", [])])    
     
     system_prompt = f"""
     Jij bent {p_data.get('name')}, de {p_data.get('role', 'Expert')}. 
-    {p_data.get('description', '')}
     Stijl: {p_data.get('style')}
-
-    ### BELANGRIJKE INSTRUCTIE ###
-    - Antwoord ALTIJD in het NEDERLANDS.
-    - Vertaal ELK onderdeel uit de context.
+    
+    ### INSTRUCTIES ###
+    - Gebruik 'voeg_taak_toe' voor herinneringen/taken.
+    - Gebruik 'toon_takenlijst' om taken te tonen.
+    - Gebruik 'calc' voor berekeningen.
+    - Antwoord altijd in het Nederlands.
 
     ### CONTEXT ###
     {context_text if context_text else "Geen specifieke bronnen gevonden."}
@@ -114,10 +155,31 @@ def generate_response(prompt, expert_name):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.2
+            tools=tools_definitie,
+            tool_choice="auto"
         )
         
-        antwoord = response.choices[0].message.content.strip()
+        message = response.choices[0].message
+        
+        if message.tool_calls:
+            for tool_call in message.tool_calls:
+                functie_naam = tool_call.function.name
+                argumenten = json.loads(tool_call.function.arguments)
+                
+                if functie_naam == "calc":
+                    resultaat = calc(**argumenten)
+                    # We geven Kevin de eer voor de berekening
+                    return f"Ik heb het uitgerekend: {resultaat}", "Kevin", []
+                
+                elif functie_naam == "voeg_taak_toe":
+                    resultaat = voeg_taak_toe(**argumenten)
+                    return resultaat, "James", []
+                
+                elif functie_naam == "toon_takenlijst":
+                    resultaat = toon_takenlijst()
+                    return resultaat, "James", []
+
+        antwoord = message.content.strip() if message.content else "Ik begrijp de vraag niet helemaal."
         
         if catchphrase and catchphrase.lower() not in antwoord.lower():
             antwoord = f"{antwoord}\n\n{catchphrase}"
@@ -125,4 +187,4 @@ def generate_response(prompt, expert_name):
         return antwoord, p_data['name'], bron_documenten
         
     except Exception as e:
-        return f"Fout bij Groq: {e}", "Systeem", []
+        return f"Fout: {e}", "Systeem", []

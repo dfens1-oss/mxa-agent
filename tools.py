@@ -1,7 +1,9 @@
 from gtts import gTTS
 import base64
+import json
 import io
 import os
+from datetime import datetime
 
 def generate_audio_base64(text):
     """Zet tekst om naar een base64 audio string voor Streamlit"""
@@ -68,3 +70,47 @@ def file_write(path, content):
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
     return f"Bestand opgeslagen op {path}"
+
+def voeg_taak_toe(taak_omschrijving):
+    """Slaat een nieuwe taak op in het takenlijstje."""
+    bestand = 'taken.json'
+    tijdstip = datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    nieuwe_taak = {
+        "datum": tijdstip,
+        "taak": taak_omschrijving,
+        "status": "open"
+    }
+
+    taken = []
+    if os.path.exists(bestand):
+        with open(bestand, 'r', encoding='utf-8') as f:
+            try:
+                taken = json.load(f)
+            except:
+                taken = []
+
+    taken.append(nieuwe_taak)
+
+    with open(bestand, 'w', encoding='utf-8') as f:
+        json.dump(taken, f, indent=4, ensure_ascii=False)
+    
+    return f"Ik heb het genoteerd: '{taak_omschrijving}'. Check, check, dubbelcheck!"
+
+def toon_takenlijst():
+    """Haalt alle openstaande taken op uit het bestand."""
+    bestand = 'taken.json'
+    if not os.path.exists(bestand):
+        return "Er staan op dit moment geen taken op je lijstje."
+
+    with open(bestand, 'r', encoding='utf-8') as f:
+        taken = json.load(f)
+    
+    if not taken:
+        return "Je takenlijst is leeg."
+
+    overzicht = "Hier zijn je huidige taken:\n"
+    for i, t in enumerate(taken, 1):
+        overzicht += f"{i}. [{t['datum']}] {t['taak']} (Status: {t['status']})\n"
+    
+    return overzicht

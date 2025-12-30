@@ -143,18 +143,8 @@ if prompt:
             chosen_expert = "james"
 
         # 2. Logica voor antwoord genereren
-        bronnen = []
-        tool_call = detect_tool(prompt)
-        
-        if tool_call and tool_call["tool"] == "calc":
-            try:
-                from tools import calc
-                res = calc(**tool_call["args"])
-                response_tekst, persona_display_name = f"Ik heb het uitgerekend: {res}", "Kevin"
-            except Exception:
-                response_tekst, persona_display_name = "Er ging iets mis bij het rekenen.", "Kevin"
-        else:
-            response_tekst, persona_display_name, bronnen = generate_response(prompt, chosen_expert)
+        # Alles loopt nu via de hersenpan; tools worden daar afgehandeld.
+        response_tekst, persona_display_name, bronnen = generate_response(prompt, chosen_expert)
 
         # 4. Avatar logica bepalen
         active_persona_slug = re.sub(r'[^a-zA-Z]', '', persona_display_name).lower().strip()
