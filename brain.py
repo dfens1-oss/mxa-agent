@@ -173,11 +173,11 @@ def generate_response(prompt, expert_name):
                 
                 elif functie_naam == "voeg_taak_toe":
                     resultaat = voeg_taak_toe(**argumenten)
-                    return resultaat, "James", []
+                    return resultaat, "Kevin", []
                 
                 elif functie_naam == "toon_takenlijst":
                     resultaat = toon_takenlijst()
-                    return resultaat, "James", []
+                    return resultaat, "Kevin", []
 
         antwoord = message.content.strip() if message.content else "Ik begrijp de vraag niet helemaal."
         
