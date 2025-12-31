@@ -4,7 +4,9 @@ import streamlit as st
 from groq import Groq
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
-# Frank: Hier zaten de 2 problems, we moeten alles importeren!
+
+# Frank: De tools importeren we hier nog wel voor het geval je ze 
+# later direct wilt aanroepen, maar de AI-expert doet dat niet meer zelf.
 from tools import calculate, voeg_taak_toe, toon_takenlijst
 
 DB_DIR = "db_mxa"
@@ -76,71 +78,38 @@ def get_rag_context(query):
 
 def get_persona(name):
     try:
-        path = os.path.join(PERSONA_DIR, f"{name.lower()}.json")
+        # Frank: Zorg dat de naam altijd lowercase is voor het bestandspad
+        clean_name = name.lower()
+        path = os.path.join(PERSONA_DIR, f"{clean_name}.json")
         if os.path.exists(path):
             with open(path, 'r', encoding='utf-8') as f:
                 return json.load(f)
     except Exception:
         pass
-    return {"name": name.capitalize(), "catchphrase": "Hoppa!", "rules": []}
-
-# Frank: Dit is de gereedschapskist definitie voor de AI
-tools_definitie = [
-    {
-        "type": "function",
-        "function": {
-            "name": "calculate",
-            "description": "Voer een berekening uit",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "expressie": {"type": "string", "description": "De som, bijv. 2+2"}
-                },
-                "required": ["expressie"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "voeg_taak_toe",
-            "description": "Sla een nieuwe taak op in de takenlijst",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "taak_omschrijving": {"type": "string", "description": "Wat moet er gebeuren?"}
-                },
-                "required": ["taak_omschrijving"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "toon_takenlijst",
-            "description": "Laat alle openstaande taken zien",
-            "parameters": {"type": "object", "properties": {}}
-        }
-    }
-]
+    # Fallback persona
+    return {"name": name.capitalize(), "role": "Expert", "style": "Behulpzaam", "catchphrase": "Check, check, dubbelcheck", "rules": []}
 
 def generate_response(prompt, expert_name):
+    """
+    Genereert een antwoord van een specifieke expert.
+    Frank's Note: Geen tools meer in deze functie om 400-errors te voorkomen!
+    """
     p_data = get_persona(expert_name)
     context_text, bron_documenten = get_rag_context(prompt)
     
-    catchphrase = p_data.get('catchphrase', '')
+    catchphrase = p_data.get('catchphrase', 'Check, check, dubbelcheck')
     rules_str = "\n".join([f"- {r}" for r in p_data.get("rules", [])])    
     
+    # Frank: De system prompt is nu strak en voorkomt tool-verwarring
     system_prompt = f"""
 Jij bent {p_data.get('name')}, de {p_data.get('role', 'Expert')}. 
 Stijl: {p_data.get('style')}
 
-### BELANGRIJKE COMMUNICATIE REGELS ###
-- Antwoord ALTIJD in natuurlijk Nederlands.
-- Gebruik NOOIT tags zoals <function>, [/function] of JSON-blokken. 
-- Jij voert zelf GEEN tools uit. Als er een berekening of taak nodig is, is die al voor je gedaan door het systeem. 
-- Praat als een coach tegen de gebruiker.
-- Eindig altijd met je catchphrase: "{catchphrase}"
+### JOUW OPDRACHT ###
+- Antwoord altijd in natuurlijk Nederlands.
+- Gebruik NOOIT technische tags zoals <function>, [/function] of JSON-blokken.
+- Jij voert zelf GEEN tools uit. Praat puur als de expert.
+- Eindig ALTIJD met je catchphrase: "{catchphrase}"
 
 ### JOUW KENNIS / CONTEXT ###
 {context_text}
@@ -150,42 +119,23 @@ Stijl: {p_data.get('style')}
 """
     
     try:
+        # Frank: We roepen Groq aan zonder 'tools' parameter
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ],
-            tools=tools_definitie,
-            tool_choice="auto"
+            temperature=0.7
         )
         
-        message = response.choices[0].message
+        antwoord = response.choices[0].message.content.strip()
         
-        if message.tool_calls:
-            for tool_call in message.tool_calls:
-                functie_naam = tool_call.function.name
-                argumenten = json.loads(tool_call.function.arguments)
-                
-                if functie_naam == "calculate":
-                    resultaat = calculate(**argumenten)
-                    # We geven Kevin de eer voor de berekening
-                    return f"Ik heb het uitgerekend: {resultaat}", "Kevin", []
-                
-                elif functie_naam == "voeg_taak_toe":
-                    resultaat = voeg_taak_toe(**argumenten)
-                    return resultaat, "Kevin", []
-                
-                elif functie_naam == "toon_takenlijst":
-                    resultaat = toon_takenlijst()
-                    return resultaat, "Kevin", []
-
-        antwoord = message.content.strip() if message.content else "Ik begrijp de vraag niet helemaal."
-        
-        if catchphrase and catchphrase.lower() not in antwoord.lower():
+        # Dubbelcheck of de AI de catchphrase niet is vergeten
+        if catchphrase.lower() not in antwoord.lower():
             antwoord = f"{antwoord}\n\n{catchphrase}"
             
         return antwoord, p_data['name'], bron_documenten
         
     except Exception as e:
-        return f"Fout: {e}", "Systeem", []
+        return f"Fout bij genereren antwoord: {e}", "Systeem", []
