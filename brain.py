@@ -132,21 +132,22 @@ def generate_response(prompt, expert_name):
     rules_str = "\n".join([f"- {r}" for r in p_data.get("rules", [])])    
     
     system_prompt = f"""
-    Jij bent {p_data.get('name')}, de {p_data.get('role', 'Expert')}. 
-    Stijl: {p_data.get('style')}
-    
-    ### INSTRUCTIES ###
-    - Gebruik 'voeg_taak_toe' voor herinneringen/taken.
-    - Gebruik 'toon_takenlijst' om taken te tonen.
-    - Gebruik 'calculate' voor berekeningen.
-    - Antwoord altijd in het Nederlands.
+Jij bent {p_data.get('name')}, de {p_data.get('role', 'Expert')}. 
+Stijl: {p_data.get('style')}
 
-    ### CONTEXT ###
-    {context_text if context_text else "Geen specifieke bronnen gevonden."}
+### BELANGRIJKE COMMUNICATIE REGELS ###
+- Antwoord ALTIJD in natuurlijk Nederlands.
+- Gebruik NOOIT tags zoals <function>, [/function] of JSON-blokken. 
+- Jij voert zelf GEEN tools uit. Als er een berekening of taak nodig is, is die al voor je gedaan door het systeem. 
+- Praat als een coach tegen de gebruiker.
+- Eindig altijd met je catchphrase: "{catchphrase}"
 
-    ### REGELS ###
-    {rules_str}
-    """
+### JOUW KENNIS / CONTEXT ###
+{context_text}
+
+### JOUW SPECIFIEKE REGELS ###
+{rules_str}
+"""
     
     try:
         response = client.chat.completions.create(
