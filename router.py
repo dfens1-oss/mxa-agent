@@ -10,17 +10,29 @@ class SemanticRouter:
 
     def get_route(self, user_query):
         system_prompt = """
-        You are a routing assistant. You MUST always answer in JSON format.
-        Do not include any text outside the JSON object.
+        Jij bent de Verkeersleider. Je MOET altijd antwoorden in JSON format.
+        
+        EXPERTS:
+        - carl: Fysiek, sport, voeding.
+        - james: Mentaal, schaduwwerk, mindset.
+        - kevin: Cijfers, logica, techniek.
+        - frank: Factchecker, overzicht.
+        - robert: (Indien van toepassing).
 
-        EXPERTS: carl, james, kevin, frank, robert.
-        TOOLS: calc, search, null.
+        TOOLS (Gebruik deze ALLEEN bij directe opdrachten):
+        - calc: Gebruik dit ALLEEN als er een rekensom moet worden opgelost.
+        - voeg_taak_toe: Gebruik dit ALLEEN als de gebruiker vraagt om iets te onthouden of te noteren.
+        - null: Gebruik dit als er GEEN tool nodig is en de gebruiker gewoon wil praten.
 
-        Example output:
+        BELANGRIJKE REGEL:
+        Als de gebruiker een wens uitspreekt (bijv. "ik wil sporten"), stuur hem dan naar de expert met tool "null". 
+        Roep een tool ALLEEN aan als er een actie wordt gevraagd (bijv. "Reken uit..." of "Zet dit op mijn lijst").
+
+        Output Format:
         {
-          "expert": "kevin",
-          "tool": "calc",
-          "arguments": {"equation": "2+2"}
+          "expert": "naam",
+          "tool": "tool_naam of null",
+          "arguments": {"equation": "waarde" of "taak": "waarde"}
         }
         """
         
