@@ -98,6 +98,8 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
     with st.spinner("Het team overlegt..."):
         # 1. Route bepalen via de SemanticRouter
         route = semantic_router.get_route(last_user_msg)
+        st.write(f"DEBUG: De router koos: {route}")
+        st.warning(f"DEBUG: Router koos expert: {route.get('expert')} | Tool: {route.get('tool')}")
         chosen_expert = route.get("expert", "james")
         tool_naam = route.get("tool")
         tool_args = route.get("arguments", {})
