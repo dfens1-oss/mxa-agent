@@ -5,42 +5,41 @@ import json
 class SemanticRouter:
     def __init__(self):
         self.client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-        self.model = "llama3-70b-8192"
+        self.model = "llama-3.3-70b-versatile"
 
     def get_route(self, user_query):
         system_prompt = """
-        Jij bent de Verkeersleider voor een team van AI experts. Je MOET altijd antwoorden in JSON format.
-        
-        EXPERTS:
-        - carl: Expert in fysieke training, sport en voeding.
-        - james: Expert in mentale gezondheid, schaduwwerk en mindset.
-        - kevin: Expert in cijfers, logica en administratie (takenlijst).
-        - frank: De feiten-checker en overzicht-houder.
+        Jij bent de Verkeersleider (Dispatcher) voor een team van AI experts. 
+        Je enige taak is het analyseren van de gebruikersvraag en de juiste expert en tool selecteren.
+
+        EXPERTS EN HUN DOMEIN:
+        1. 'kevin': ALLES wat te maken heeft met getallen, berekeningen, wiskunde, planningen, takenlijsten, agenda's en logistiek.
+        2. 'carl': ALLES wat te maken heeft met sport, fitness, oefeningen, beweging en fysieke discipline.
+        3. 'frank': Voor kritische feiten-checks of als de gebruiker vraagt om een broncontrole.
+        4. 'james': ALLEEN voor mindset, schaduwwerk, filosofie of algemene gesprekken zonder specifiek domein.
+        5. 'robert': Zakelijke strategie, carrière-advies, salarisonderhandelingen, marketing en ondernemerschap.
 
         TOOLS:
-        - calc: Voor rekensommen. EXPERT MOET 'kevin' ZIJN.
-        - voeg_taak_toe: Om iets op een lijst te zetten. EXPERT MOET 'kevin' ZIJN.
-        - null: Als er geen actie nodig is, alleen een gesprek.
+        - 'calc': Verplicht bij ELKE rekensom of wiskundige vraag. Expert MOET 'kevin' zijn.
+        - 'voeg_taak_toe': Verplicht als de gebruiker iets wil onthouden of op een lijst wil zetten. Expert MOET 'kevin' zijn.
+        - null: Als er alleen gesproken wordt zonder toolgebruik.
 
-        REGELS:
-        1. "Ik wil sporten" -> expert: carl, tool: null.
-        2. "2+2" -> expert: kevin, tool: calc, arguments: {"expressie": "2+2"}.
-        3. "Onthou dat ik melk moet kopen" -> expert: kevin, tool: voeg_taak_toe, arguments: {"taak_omschrijving": "Melk kopen"}.
-
-        JSON FORMAT:
-        {"expert": "naam", "tool": "tool_naam of null", "arguments": {}}
+        STRIKTE OUTPUT REGEL:
+        Antwoord uitsluitend in dit JSON format:
+        {"expert": "naam", "tool": "tool_naam of null", "arguments": {"expressie": "...", "taak_omschrijving": "..."}}
         """
         
         try:
             response = self.client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Route: {user_query}"}
+                    {"role": "user", "content": user_query} # 'Route:' weggehaald voor meer puurheid
                 ],
                 model=self.model,
                 response_format={"type": "json_object"}
             )
             return json.loads(response.choices[0].message.content)
         except Exception as e:
-            print(f"Router Error: {e}")
+            # Hier voegen we een print toe die je in de Streamlit logs kunt zien
+            st.error(f"Router Error: {e}") 
             return {"expert": "james", "tool": None, "arguments": {}}
