@@ -10,19 +10,19 @@ from tools import generate_audio_base64, calculate, voeg_taak_toe, toon_takenlij
 from streamlit_mic_recorder import mic_recorder
 from router import SemanticRouter
 
-semantic_router = SemanticRouter()
+# --- 1. CONFIGURATIE (ALTIJD BOVENAAN) ---
+st.set_page_config(
+    page_title="MXA Expert Flow",
+    page_icon="assets/favicon.png",
+    layout="centered"
+)
 
-# --- CONFIGURATIE & PADEN ---
-st.set_page_config(page_title="MXA Assistant", page_icon="🦁", layout="centered")
+# --- 2. INITIALISATIE ---
+if 'semantic_router' not in st.session_state:
+    st.session_state.semantic_router = SemanticRouter()
 IMAGE_DIR = "assets"
 
-# --- INITIALISATIE SESSION STATE ---
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "processed_audio_hash" not in st.session_state:
-    st.session_state.processed_audio_hash = None
-
-# --- HELPER FUNCTIES ---
+# --- 3. HELPER FUNCTIES ---
 def get_image_as_base64(path):
     try:
         if os.path.exists(path):
@@ -35,37 +35,59 @@ def get_image_as_base64(path):
 
 def get_daily_quote():
     try:
-        response = requests.get("https://zenquotes.io/api/today", timeout=5)
-        if response.status_code == 200:
-            data = response.json()[0]
-            return {"quote": data['q'], "author": data['a'], "persona": "Inspiratie"}
-    except Exception:
+        res = requests.get("https://zenquotes.io/api/today", timeout=2)
+        if res.status_code == 200:
+            d = res.json()[0]
+            return {"quote": d['q'], "author": d['a']}
+    except:
         pass
-    return {"quote": "Focus op de horizon.", "author": "James", "persona": "James"}
+    return {"quote": "Focus op de horizon.", "author": "James"}
 
-# --- SIDEBAR ---
+# --- 4. DE ZIJKANT (SIDEBAR) ---
 with st.sidebar:
-    main_avatar = os.path.join(IMAGE_DIR, "james.png")
-    if os.path.exists(main_avatar):
-        st.image(main_avatar, width=100)
+    if os.path.exists("assets/logo.png"):
+        st.image("assets/logo.png", use_container_width=True)
     
-    st.markdown("### Je AI Coach Team")
+    st.title("MXA Agents")
+    
     q = get_daily_quote()
-    st.info(f"**{q['persona']} zegt:**\n\n*\"{q['quote']}\"* \n\n— {q['author']}")
+    st.info(f"**Inspiratie:**\n\n*\"{q['quote']}\"* \n\n— {q['author']}")
     
+    st.markdown("---")
+    st.subheader("Je Expert Team:")
+    experts = {
+        "James": "Mindset & Algemeen",
+        "Kevin": "Cijfers & Planning",
+        "Carl": "Sport & Bewegen",
+        "Robert": "Business & Carrière",
+        "Frank": "Factcheck"
+    }
+    for naam, rol in experts.items():
+        st.write(f"👤 **{naam}**")
+        st.caption(rol)
+    
+    st.markdown("---")
     if st.button("🗑️ Wis geschiedenis"):
         st.session_state.messages = []
         st.session_state.processed_audio_hash = None
         st.rerun()
+    st.caption("Check, check, dubbelcheck!")
 
-# --- CHAT INTERFACE WEERGAVE (Cruciaal voor beeld!) ---
+# --- 5. SESSION STATE ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "processed_audio_hash" not in st.session_state:
+    st.session_state.processed_audio_hash = None
+
+# --- 6. CHAT INTERFACE WEERGAVE ---
 st.title("MXA Assistant")
 
 for message in st.session_state.messages:
     role = message["role"]
     p_key = str(message.get("persona", "james")).lower().strip()
-    avatar_data = "👤" if role == "user" else get_image_as_base64(os.path.join(IMAGE_DIR, f"{p_key}.png"))
     
+    # Avatar bepalen
+    avatar_data = "👤" if role == "user" else get_image_as_base64(os.path.join(IMAGE_DIR, f"{p_key}.png"))
     if not avatar_data and role != "user":
         icons = {"frank": "🦊", "carl": "💪", "kevin": "📅", "james": "🧠", "robert": "💼"}
         avatar_data = icons.get(p_key, "🤖")
@@ -73,7 +95,7 @@ for message in st.session_state.messages:
     with st.chat_message(role, avatar=avatar_data):
         st.markdown(message["content"])
 
-# --- INPUT VERWERKING ---
+# --- 7. INPUT VERWERKING ---
 audio_data = mic_recorder(start_prompt="🎙️ Praat", stop_prompt="🛑 Stop", key='recorder')
 typed_prompt = st.chat_input("Stel je vraag aan het panel...")
 
@@ -91,38 +113,31 @@ if audio_data and 'bytes' in audio_data:
                 st.session_state.processed_audio_hash = current_hash
                 st.rerun()
 
-# --- HET BREIN VAN DE UI (DE ROUTING FIX) ---
+# --- 8. HET BREIN (ROUTING & RESPONSE) ---
 if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
     last_user_msg = st.session_state.messages[-1]["content"]
     
     with st.spinner("Het team overlegt..."):
-        # 1. Route bepalen via de SemanticRouter
-        route = semantic_router.get_route(last_user_msg)
-        st.write(f"DEBUG: De router koos: {route}")
-        st.warning(f"DEBUG: Router koos expert: {route.get('expert')} | Tool: {route.get('tool')}")
+        route = st.session_state.semantic_router.get_route(last_user_msg)
         chosen_expert = route.get("expert", "james")
         tool_naam = route.get("tool")
         tool_args = route.get("arguments", {})
 
-        # 2. Tool logica (Kevin handelt de techniek af op de achtergrond)
         extra_info = ""
         if tool_naam == "calc":
             som = list(tool_args.values())[0] if tool_args else last_user_msg
             result = calculate(som)
-            extra_info = f"\n(Systeem-notitie voor Kevin: De uitkomst is {result})"
-            chosen_expert = "kevin" # We forceren Kevin als er gerekend is
+            extra_info = f"\n(Systeem-notitie: De uitkomst is {result})"
+            chosen_expert = "kevin"
         
         elif tool_naam == "voeg_taak_toe":
             taak = list(tool_args.values())[0] if tool_args else "Onbekende taak"
             result = voeg_taak_toe(taak)
-            extra_info = f"\n(Systeem-notitie voor Kevin: De taak is opgeslagen. {result})"
+            extra_info = f"\n(Systeem-notitie: De taak is opgeslagen. {result})"
             chosen_expert = "kevin"
 
-        # 3. Genereer het definitieve antwoord via Brain
-        final_prompt = last_user_msg + extra_info
-        response_tekst, persona_name, bronnen = generate_response(final_prompt, chosen_expert)
+        response_tekst, persona_name, bronnen = generate_response(last_user_msg + extra_info, chosen_expert)
 
-        # 4. Opslaan in geschiedenis
         persona_slug = re.sub(r'[^a-zA-Z]', '', persona_name).lower().strip()
         st.session_state.messages.append({
             "role": "assistant", 
@@ -133,7 +148,7 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
         })
         st.rerun()
 
-# --- AUDIO & BRONNEN WEERGAVE ---
+# --- 9. AUDIO & BRONNEN ---
 if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
     last_msg = st.session_state.messages[-1]
     
@@ -143,7 +158,7 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "assis
         st.markdown(audio_html, unsafe_allow_html=True)
 
     if last_msg.get("bronnen"):
-        with st.expander("🔍 Bekijk bronnen (vossig speurwerk)"):
+        with st.expander("🔍 Bekijk bronnen"):
             for doc in last_msg["bronnen"]:
                 p = doc.metadata.get('page', '?')
                 st.write(f"**Pagina {p+1 if isinstance(p, int) else p}**")
