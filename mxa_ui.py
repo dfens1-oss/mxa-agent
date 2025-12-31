@@ -1,16 +1,15 @@
 import streamlit as st
 import os
 import json
-import random
 import base64
 import re
 import requests
 import hashlib
-from datetime import date
 from brain import generate_response, transcribe_audio
-from tools import generate_audio_base64
+from tools import generate_audio_base64, calculate, voeg_taak_toe, toon_takenlijst
 from streamlit_mic_recorder import mic_recorder
 from router import SemanticRouter
+
 semantic_router = SemanticRouter()
 
 # --- CONFIGURATIE & PADEN ---
@@ -23,7 +22,7 @@ if "messages" not in st.session_state:
 if "processed_audio_hash" not in st.session_state:
     st.session_state.processed_audio_hash = None
 
-# --- HELPER FUNCTIE ---
+# --- HELPER FUNCTIES ---
 def get_image_as_base64(path):
     try:
         if os.path.exists(path):
@@ -59,7 +58,7 @@ with st.sidebar:
         st.session_state.processed_audio_hash = None
         st.rerun()
 
-# --- CHAT INTERFACE WEERGAVE ---
+# --- CHAT INTERFACE WEERGAVE (Cruciaal voor beeld!) ---
 st.title("MXA Assistant")
 
 for message in st.session_state.messages:
@@ -74,91 +73,73 @@ for message in st.session_state.messages:
     with st.chat_message(role, avatar=avatar_data):
         st.markdown(message["content"])
 
-# --- AUDIO INPUT & VERWERKING (De Loop Fix) ---
+# --- INPUT VERWERKING ---
 audio_data = mic_recorder(start_prompt="🎙️ Praat", stop_prompt="🛑 Stop", key='recorder')
-
-prompt = None
-
-if audio_data and 'bytes' in audio_data:
-    # Maak een unieke hash van de audio bytes
-    current_audio_hash = hashlib.md5(audio_data['bytes']).hexdigest()
-    
-    # Check of we deze audio al verwerkt hebben
-    if current_audio_hash != st.session_state.processed_audio_hash:
-        with st.spinner("Frank vertaalt je spraak..."):
-            tekst_van_spraak = transcribe_audio(audio_data['bytes'])
-            
-            if tekst_van_spraak and len(tekst_van_spraak) > 2:
-                st.session_state.messages.append({"role": "user", "content": tekst_van_spraak})
-                st.session_state.processed_audio_hash = current_audio_hash
-                st.rerun()
-
-# --- TEXT INPUT ---
 typed_prompt = st.chat_input("Stel je vraag aan het panel...")
+
 if typed_prompt:
-    prompt = typed_prompt
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    st.session_state.messages.append({"role": "user", "content": typed_prompt})
     st.rerun()
 
-# --- ANTWOORD GENEREREN ---
+if audio_data and 'bytes' in audio_data:
+    current_hash = hashlib.md5(audio_data['bytes']).hexdigest()
+    if current_hash != st.session_state.processed_audio_hash:
+        with st.spinner("Frank vertaalt je spraak..."):
+            tekst = transcribe_audio(audio_data['bytes'])
+            if tekst and len(tekst) > 2:
+                st.session_state.messages.append({"role": "user", "content": tekst})
+                st.session_state.processed_audio_hash = current_hash
+                st.rerun()
+
+# --- HET BREIN VAN DE UI (DE ROUTING FIX) ---
 if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
     last_user_msg = st.session_state.messages[-1]["content"]
     
     with st.spinner("Het team overlegt..."):
-        # 1. De Nieuwe Semantische Router aanroepen
+        # 1. Route bepalen via de SemanticRouter
         route = semantic_router.get_route(last_user_msg)
-        chosen_expert = route["expert"]
-        tool_naam = route["tool"]
+        chosen_expert = route.get("expert", "james")
+        tool_naam = route.get("tool")
         tool_args = route.get("arguments", {})
 
-        # 2. Check of er een tool uitgevoerd moet worden
-        tool_result = None
+        # 2. Tool logica (Kevin handelt de techniek af op de achtergrond)
+        extra_info = ""
         if tool_naam == "calc":
-            from tools import calculate
-            
-            # We pakken de waarde uit de dictionary, ongeacht de naam (expressie/equation)
-            if isinstance(tool_args, dict) and tool_args:
-                # Dit pakt de allereerste waarde uit de verzameling argumenten
-                args_list = list(tool_args.values())
-                equation_to_solve = args_list[0]
-            else:
-                equation_to_solve = last_user_msg
+            som = list(tool_args.values())[0] if tool_args else last_user_msg
+            result = calculate(som)
+            extra_info = f"\n(Systeem-notitie voor Kevin: De uitkomst is {result})"
+            chosen_expert = "kevin" # We forceren Kevin als er gerekend is
+        
+        elif tool_naam == "voeg_taak_toe":
+            taak = list(tool_args.values())[0] if tool_args else "Onbekende taak"
+            result = voeg_taak_toe(taak)
+            extra_info = f"\n(Systeem-notitie voor Kevin: De taak is opgeslagen. {result})"
+            chosen_expert = "kevin"
 
-            # CRUCIAAL: We geven de waarde door zonder 'keyword' (dus niet equation=...)
-            # Hierdoor accepteert de functie het altijd.
-            tool_result = calculate(equation_to_solve)
-            
-            last_user_msg = f"{last_user_msg} (Systeem-notitie voor Kevin: De uitkomst is {tool_result})"
+        # 3. Genereer het definitieve antwoord via Brain
+        final_prompt = last_user_msg + extra_info
+        response_tekst, persona_name, bronnen = generate_response(final_prompt, chosen_expert)
 
-        # 3. Genereer response via Brain (met de gekozen expert)
-        response_tekst, persona_display_name, bronnen = generate_response(last_user_msg, chosen_expert)
-
-        # 4. Sla op in history
-        active_persona_slug = re.sub(r'[^a-zA-Z]', '', persona_display_name).lower().strip()
+        # 4. Opslaan in geschiedenis
+        persona_slug = re.sub(r'[^a-zA-Z]', '', persona_name).lower().strip()
         st.session_state.messages.append({
             "role": "assistant", 
             "content": response_tekst, 
-            "persona": active_persona_slug,
-            "display_name": persona_display_name,
+            "persona": persona_slug,
+            "display_name": persona_name,
             "bronnen": bronnen
         })
         st.rerun()
 
-# --- AUDIO & BRONNEN WEERGAVE (Voor het laatste bericht) ---
+# --- AUDIO & BRONNEN WEERGAVE ---
 if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
     last_msg = st.session_state.messages[-1]
     
-    # Audio afspelen voor het nieuwste bericht
     audio_b64 = generate_audio_base64(last_msg["content"])
     if audio_b64:
-        audio_html = f"""
-            <audio controls autoplay="true" style="width: 100%; height: 35px; margin-top: 10px;">
-                <source src="data:audio/mp3;base64,{audio_b64}" type="audio/mp3">
-            </audio>
-        """
+        audio_html = f'<audio controls autoplay="true" style="width: 100%; height: 35px; margin-top: 10px;"><source src="data:audio/mp3;base64,{audio_b64}" type="audio/mp3"></audio>'
         st.markdown(audio_html, unsafe_allow_html=True)
 
-    # Bronnen tonen
     if last_msg.get("bronnen"):
         with st.expander("🔍 Bekijk bronnen (vossig speurwerk)"):
             for doc in last_msg["bronnen"]:
