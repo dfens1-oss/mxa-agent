@@ -83,7 +83,7 @@ def voeg_taak_toe(taak_omschrijving):
     with open(bestand, 'w', encoding='utf-8') as f:
         json.dump(taken, f, indent=4, ensure_ascii=False)
     
-    return f"Ik heb het genoteerd: '{taak_omschrijving}'. Check, check, dubbelcheck!"
+    return f"Taak genoteerd: '{taak_omschrijving}'." # Catchphrase hier weghalen
 
 def toon_takenlijst():
     """Haalt alle openstaande taken op uit het bestand."""

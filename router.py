@@ -7,39 +7,43 @@ class SemanticRouter:
         self.client = Groq(api_key=st.secrets["GROQ_API_KEY"])
         self.model = "llama-3.3-70b-versatile"
 
-    def get_route(self, user_query):
-        system_prompt = """
-        Jij bent de Verkeersleider (Dispatcher) voor een team van AI experts. 
-        Je enige taak is het analyseren van de gebruikersvraag en de juiste expert en tool selecteren.
+    def get_route(self, user_query, last_expert=None):
+        # We geven de context van de vorige expert mee in de system prompt
+        context_instruction = ""
+        if last_expert:
+            context_instruction = f"De vorige expert die aan het woord was is: '{last_expert}'."
 
-        EXPERTS EN HUN DOMEIN:
-        1. 'kevin': ALLES wat te maken heeft met getallen, berekeningen, wiskunde, planningen, takenlijsten, agenda's en logistiek.
-        2. 'carl': ALLES wat te maken heeft met sport, fitness, oefeningen, beweging en fysieke discipline.
-        3. 'frank': Voor kritische feiten-checks of als de gebruiker vraagt om een broncontrole.
-        4. 'james': ALLEEN voor mindset, schaduwwerk, filosofie of algemene gesprekken zonder specifiek domein.
-        5. 'robert': Zakelijke strategie, carrière-advies, salarisonderhandelingen, marketing en ondernemerschap.
+        system_prompt = f"""
+        Jij bent de Verkeersleider voor My eXpert Assistent (MXA).
+        {context_instruction}
 
-        TOOLS:
-        - 'calc': Verplicht bij ELKE rekensom of wiskundige vraag. Expert MOET 'kevin' zijn.
-        - 'voeg_taak_toe': Verplicht als de gebruiker iets wil onthouden of op een lijst wil zetten. Expert MOET 'kevin' zijn.
-        - null: Als er alleen gesproken wordt zonder toolgebruik.
+        ### JOUW LOGICA ###
+        1. CONTEXT-BEHOUD: Als de gebruiker vraagt "klopt dat?", "is dat zo?" of "echt?", blijf dan bij de expert die als laatste sprak ('{last_expert}'), tenzij er een duidelijke reden is om te wisselen.
+        2. HARD RULE: Bij getallen, sommen of rekenkundige tekens (+, -, *, /) kies je ALTIJD 'kevin' en tool 'calc'.
+        3. NAAM-PRIORITEIT: Wordt een expert bij naam genoemd? Kies die expert.
+        4. James is de expert voor mindset en motivatie. Hij bemoeit zich NOOIT met feiten of cijfers.
 
-        STRIKTE OUTPUT REGEL:
-        Antwoord uitsluitend in dit JSON format:
-        {"expert": "naam", "tool": "tool_naam of null", "arguments": {"expressie": "...", "taak_omschrijving": "..."}}
+        ### EXPERTS ###
+        - 'kevin': Cijfers, berekeningen, takenlijsten.
+        - 'james': Mindset, reflectie, algemene praat.
+        - 'carl': Sport en fysiek.
+        - 'robert': Business en carrière.
+        - 'frank': Feitencontrole (alleen als de vraag specifiek over de bronnen gaat).
+
+        OUTPUT JSON FORMAT:
+        {{"expert": "naam", "tool": "calc" | "voeg_taak_toe" | null, "arguments": {{}}}}
         """
         
         try:
             response = self.client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_query} # 'Route:' weggehaald voor meer puurheid
+                    {"role": "user", "content": user_query}
                 ],
                 model=self.model,
                 response_format={"type": "json_object"}
             )
             return json.loads(response.choices[0].message.content)
         except Exception as e:
-            # Hier voegen we een print toe die je in de Streamlit logs kunt zien
             st.error(f"Router Error: {e}") 
             return {"expert": "james", "tool": None, "arguments": {}}
